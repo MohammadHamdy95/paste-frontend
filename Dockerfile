@@ -1,8 +1,7 @@
 FROM node:22-alpine AS build
 WORKDIR /app
-# Where the built bundle calls the paste API; CI overrides for prod.
-ARG VITE_API_URL=http://api.paste.localhost
-ENV VITE_API_URL=$VITE_API_URL
+# No API URL build arg: the UI and API share the same origin by design
+# (/v1/* is routed to the backend by the platform Caddy).
 COPY package*.json ./
 RUN npm ci
 COPY . .

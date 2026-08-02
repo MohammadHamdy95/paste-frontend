@@ -1,7 +1,8 @@
 import { ApiError, type CreatePasteInput, type Paste } from './types'
 
-// '' in dev (vite proxies /v1 to the local backend); an absolute URL in
-// built images (VITE_API_URL baked at build time).
+// Always same-origin: /v1 is proxied to the backend by vite in dev and
+// by the platform Caddy in built images. VITE_API_URL exists only as an
+// escape hatch and is normally unset.
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
