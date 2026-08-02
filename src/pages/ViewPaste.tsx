@@ -11,6 +11,7 @@ export function ViewPaste() {
   const [paste, setPaste] = useState<Paste | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<'link' | 'content' | null>(null)
+  const [showCreatedBanner, setShowCreatedBanner] = useState(Boolean(state?.justCreated))
 
   useEffect(() => {
     if (!id) return
@@ -22,6 +23,12 @@ export function ViewPaste() {
           : e instanceof Error ? e.message : 'Something went wrong')
       })
   }, [id])
+
+  useEffect(() => {
+    if (!showCreatedBanner) return
+    const timer = setTimeout(() => setShowCreatedBanner(false), 6000)
+    return () => clearTimeout(timer)
+  }, [showCreatedBanner])
 
   const highlighted = useMemo(() => {
     if (!paste?.content) return null
@@ -49,9 +56,9 @@ export function ViewPaste() {
 
   return (
     <div className="view-paste">
-      {state?.justCreated && (
+      {showCreatedBanner && (
         <div className="banner ok">
-          created — share <a href={paste.url}>{paste.url}</a>
+          share <a href={paste.url}>{paste.url}</a>
         </div>
       )}
       {paste.burned && (
