@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createPaste, getAdminToken } from '../api/client'
-import { ApiError } from '../api/types'
-import { TokenPrompt } from '../components/TokenPrompt'
+import { createPaste } from '../api/client'
 
 const SYNTAXES = [
   'text', 'bash', 'c', 'cpp', 'css', 'go', 'html', 'java', 'javascript',
@@ -26,7 +24,6 @@ export function NewPaste() {
   const [burn, setBurn] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [hasToken, setHasToken] = useState(() => getAdminToken() !== '')
 
   async function submit() {
     if (!content.trim()) return
@@ -41,19 +38,10 @@ export function NewPaste() {
       })
       navigate(`/${paste.id}`, { state: { justCreated: true } })
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) {
-        setHasToken(false)
-        setError('Admin token missing or invalid.')
-      } else {
-        setError(e instanceof Error ? e.message : 'Something went wrong')
-      }
+      setError(e instanceof Error ? e.message : 'Something went wrong')
     } finally {
       setBusy(false)
     }
-  }
-
-  if (!hasToken) {
-    return <TokenPrompt onSaved={() => setHasToken(true)} />
   }
 
   return (
