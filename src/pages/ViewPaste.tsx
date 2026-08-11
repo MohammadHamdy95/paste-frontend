@@ -4,7 +4,8 @@ import hljs from 'highlight.js/lib/common'
 import 'highlight.js/styles/github-dark.css'
 import { getPaste, rawUrl } from '../api/client'
 import { ApiError, type Paste } from '../api/types'
-import { renderMarkdown } from '../lib/markdown'
+import { renderMarkdownWithDiagrams } from '../lib/markdown'
+import { Mermaid } from '../components/Mermaid'
 
 export function ViewPaste() {
   const { id } = useParams<{ id: string }>()
@@ -40,18 +41,28 @@ export function ViewPaste() {
   }, [showCreatedBanner, burnJustCreated])
 
   const isMarkdown = paste?.syntax === 'markdown'
+  const isMermaid = paste?.syntax === 'mermaid'
+  const renderable = isMarkdown || isMermaid
 
   const highlighted = useMemo(() => {
-    if (!paste?.content || isMarkdown) return null
+    if (!paste?.content || renderable) return null
     if (paste.syntax && paste.syntax !== 'text' && hljs.getLanguage(paste.syntax)) {
       return hljs.highlight(paste.content, { language: paste.syntax }).value
     }
     return null
-  }, [paste, isMarkdown])
+  }, [paste, renderable])
 
-  const markdownHtml = useMemo(() => {
-    if (!paste?.content || !isMarkdown || mdView !== 'rendered') return null
-    return renderMarkdown(paste.content)
+  const [markdownHtml, setMarkdownHtml] = useState<string | null>(null)
+  useEffect(() => {
+    let alive = true
+    if (paste?.content && isMarkdown && mdView === 'rendered') {
+      renderMarkdownWithDiagrams(paste.content).then((h) => alive && setMarkdownHtml(h))
+    } else {
+      setMarkdownHtml(null)
+    }
+    return () => {
+      alive = false
+    }
   }, [paste, isMarkdown, mdView])
 
   async function copy(what: 'link' | 'content') {
@@ -98,7 +109,7 @@ export function ViewPaste() {
         <span>created {new Date(paste.createdAt).toLocaleString()}</span>
         {paste.expiresAt && <span>expires {new Date(paste.expiresAt).toLocaleString()}</span>}
         <span className="spacer" />
-        {isMarkdown && (
+        {renderable && (
           <button onClick={() => setMdView(mdView === 'rendered' ? 'source' : 'rendered')}>
             {mdView === 'rendered' ? 'view source' : 'view rendered'}
           </button>
@@ -113,8 +124,14 @@ export function ViewPaste() {
           <a className="button" href={rawUrl(paste.id)} target="_blank" rel="noreferrer">raw</a>
         )}
       </div>
-      {markdownHtml ? (
+      {isMermaid && mdView === 'rendered' ? (
+        <div className="paste-content">
+          <Mermaid code={paste.content ?? ''} />
+        </div>
+      ) : markdownHtml ? (
         <div className="paste-content md-body" dangerouslySetInnerHTML={{ __html: markdownHtml }} />
+      ) : isMarkdown && mdView === 'rendered' ? (
+        <div className="notice">rendering…</div>
       ) : (
         <pre className="paste-content">
           {highlighted

@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createPaste } from '../api/client'
-import { renderMarkdown } from '../lib/markdown'
+import { renderMarkdownWithDiagrams } from '../lib/markdown'
+import { Mermaid } from '../components/Mermaid'
 
 const SYNTAXES = [
   'text', 'bash', 'c', 'cpp', 'css', 'go', 'html', 'java', 'javascript',
-  'json', 'kotlin', 'markdown', 'python', 'rust', 'sql', 'typescript', 'yaml',
+  'json', 'kotlin', 'markdown', 'mermaid', 'python', 'rust', 'sql',
+  'typescript', 'yaml',
 ]
 
 const EXPIRIES: Array<{ label: string; seconds: number | null }> = [
@@ -26,9 +28,24 @@ export function NewPaste() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [previewing, setPreviewing] = useState(false)
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
 
   const isMarkdown = syntax === 'markdown'
-  const showPreview = isMarkdown && previewing
+  const isMermaid = syntax === 'mermaid'
+  const previewable = isMarkdown || isMermaid
+  const showPreview = previewable && previewing
+
+  useEffect(() => {
+    let alive = true
+    if (showPreview && isMarkdown) {
+      renderMarkdownWithDiagrams(content).then((h) => alive && setPreviewHtml(h))
+    } else {
+      setPreviewHtml(null)
+    }
+    return () => {
+      alive = false
+    }
+  }, [showPreview, isMarkdown, content])
 
   async function submit() {
     if (!content.trim()) return
@@ -54,7 +71,7 @@ export function NewPaste() {
 
   return (
     <div className="new-paste">
-      {isMarkdown && (
+      {previewable && (
         <div className="md-tabs">
           <button
             className={!previewing ? 'active' : ''}
@@ -70,10 +87,14 @@ export function NewPaste() {
           </button>
         </div>
       )}
-      {showPreview ? (
+      {showPreview && isMermaid ? (
+        <div className="paste-input md-preview">
+          <Mermaid code={content} />
+        </div>
+      ) : showPreview ? (
         <div
           className="paste-input md-body md-preview"
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
+          dangerouslySetInnerHTML={{ __html: previewHtml ?? '' }}
         />
       ) : (
         <textarea
