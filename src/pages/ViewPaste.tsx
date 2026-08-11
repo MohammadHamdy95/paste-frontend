@@ -4,17 +4,24 @@ import hljs from 'highlight.js/lib/common'
 import 'highlight.js/styles/github-dark.css'
 import { getPaste, rawUrl } from '../api/client'
 import { ApiError, type Paste } from '../api/types'
+import { renderMarkdown } from '../lib/markdown'
 
 export function ViewPaste() {
   const { id } = useParams<{ id: string }>()
   const { state } = useLocation()
-  const [paste, setPaste] = useState<Paste | null>(null)
+  // A just-created paste arrives via router state — using it (instead of
+  // re-fetching) is what keeps burn-after-reading pastes alive until a
+  // recipient actually opens the link.
+  const [paste, setPaste] = useState<Paste | null>(state?.paste ?? null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<'link' | 'content' | null>(null)
   const [showCreatedBanner, setShowCreatedBanner] = useState(Boolean(state?.justCreated))
+  const [mdView, setMdView] = useState<'rendered' | 'source'>('rendered')
+
+  const burnJustCreated = Boolean(state?.justCreated && paste?.burnAfterReading && !paste?.burned)
 
   useEffect(() => {
-    if (!id) return
+    if (!id || paste) return
     getPaste(id)
       .then(setPaste)
       .catch((e) => {
@@ -22,21 +29,30 @@ export function ViewPaste() {
           ? 'This paste does not exist — it may have expired or been burned.'
           : e instanceof Error ? e.message : 'Something went wrong')
       })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   useEffect(() => {
-    if (!showCreatedBanner) return
+    // The plain "share" banner fades; the burn warning must not.
+    if (!showCreatedBanner || burnJustCreated) return
     const timer = setTimeout(() => setShowCreatedBanner(false), 6000)
     return () => clearTimeout(timer)
-  }, [showCreatedBanner])
+  }, [showCreatedBanner, burnJustCreated])
+
+  const isMarkdown = paste?.syntax === 'markdown'
 
   const highlighted = useMemo(() => {
-    if (!paste?.content) return null
+    if (!paste?.content || isMarkdown) return null
     if (paste.syntax && paste.syntax !== 'text' && hljs.getLanguage(paste.syntax)) {
       return hljs.highlight(paste.content, { language: paste.syntax }).value
     }
     return null
-  }, [paste])
+  }, [paste, isMarkdown])
+
+  const markdownHtml = useMemo(() => {
+    if (!paste?.content || !isMarkdown || mdView !== 'rendered') return null
+    return renderMarkdown(paste.content)
+  }, [paste, isMarkdown, mdView])
 
   async function copy(what: 'link' | 'content') {
     await navigator.clipboard.writeText(what === 'link' ? paste!.url : paste!.content ?? '')
@@ -56,10 +72,18 @@ export function ViewPaste() {
 
   return (
     <div className="view-paste">
-      {showCreatedBanner && (
-        <div className="banner ok">
-          share <a href={paste.url}>{paste.url}</a>
+      {burnJustCreated ? (
+        <div className="banner warn">
+          burn-after-reading — share <a href={paste.url}>{paste.url}</a> without
+          opening it yourself: the first visit destroys this paste. Leaving or
+          refreshing this page is safe; opening the link is not.
         </div>
+      ) : (
+        showCreatedBanner && (
+          <div className="banner ok">
+            share <a href={paste.url}>{paste.url}</a>
+          </div>
+        )
       )}
       {paste.burned && (
         <div className="banner warn">
@@ -74,6 +98,11 @@ export function ViewPaste() {
         <span>created {new Date(paste.createdAt).toLocaleString()}</span>
         {paste.expiresAt && <span>expires {new Date(paste.expiresAt).toLocaleString()}</span>}
         <span className="spacer" />
+        {isMarkdown && (
+          <button onClick={() => setMdView(mdView === 'rendered' ? 'source' : 'rendered')}>
+            {mdView === 'rendered' ? 'view source' : 'view rendered'}
+          </button>
+        )}
         <button onClick={() => copy('content')}>
           {copied === 'content' ? 'copied!' : 'copy'}
         </button>
@@ -84,11 +113,15 @@ export function ViewPaste() {
           <a className="button" href={rawUrl(paste.id)} target="_blank" rel="noreferrer">raw</a>
         )}
       </div>
-      <pre className="paste-content">
-        {highlighted
-          ? <code dangerouslySetInnerHTML={{ __html: highlighted }} />
-          : <code>{paste.content}</code>}
-      </pre>
+      {markdownHtml ? (
+        <div className="paste-content md-body" dangerouslySetInnerHTML={{ __html: markdownHtml }} />
+      ) : (
+        <pre className="paste-content">
+          {highlighted
+            ? <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+            : <code>{paste.content}</code>}
+        </pre>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createPaste } from '../api/client'
+import { renderMarkdown } from '../lib/markdown'
 
 const SYNTAXES = [
   'text', 'bash', 'c', 'cpp', 'css', 'go', 'html', 'java', 'javascript',
@@ -24,6 +25,10 @@ export function NewPaste() {
   const [burn, setBurn] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [previewing, setPreviewing] = useState(false)
+
+  const isMarkdown = syntax === 'markdown'
+  const showPreview = isMarkdown && previewing
 
   async function submit() {
     if (!content.trim()) return
@@ -36,7 +41,10 @@ export function NewPaste() {
         expiresIn,
         burnAfterReading: burn,
       })
-      navigate(`/${paste.id}`, { state: { justCreated: true } })
+      // Pass the created paste along so the view page doesn't re-fetch —
+      // a fetch would consume burn-after-reading pastes before they can
+      // ever be shared.
+      navigate(`/${paste.id}`, { state: { justCreated: true, paste } })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
     } finally {
@@ -46,14 +54,37 @@ export function NewPaste() {
 
   return (
     <div className="new-paste">
-      <textarea
-        className="paste-input"
-        placeholder="Paste your text or code here…"
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        spellCheck={false}
-        autoFocus
-      />
+      {isMarkdown && (
+        <div className="md-tabs">
+          <button
+            className={!previewing ? 'active' : ''}
+            onClick={() => setPreviewing(false)}
+          >
+            write
+          </button>
+          <button
+            className={previewing ? 'active' : ''}
+            onClick={() => setPreviewing(true)}
+          >
+            preview
+          </button>
+        </div>
+      )}
+      {showPreview ? (
+        <div
+          className="paste-input md-body md-preview"
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
+        />
+      ) : (
+        <textarea
+          className="paste-input"
+          placeholder="Paste your text or code here…"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          spellCheck={false}
+          autoFocus
+        />
+      )}
       <div className="toolbar">
         <label>
           syntax
